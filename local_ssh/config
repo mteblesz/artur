@@ -1,0 +1,5 @@
+Host ssh.mteblesz.dev
+    ProxyCommand cloudflared access ssh --hostname %h
+
+---eof
+> ssh artur-cd@ssh.mteblesz.dev
