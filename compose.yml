@@ -1,15 +1,17 @@
 services:
-  nginx:
-    image: nginx:latest
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      - api
   api:
     image: ghcr.io/mteblesz/artur/api:latest
     container_name: api
     restart: unless-stopped
     environment:
       ASPNETCORE_URLS: http://+:8080
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf
+    depends_on:
+      - api

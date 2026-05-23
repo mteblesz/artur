@@ -1,0 +1,59 @@
+name: Deploy to Raspberry Pi
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push API (ARM)
+        uses: docker/build-push-action@v5
+        with:
+          context: backend
+          file: backend/servartur/src/Servartur.Api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api:latest
+          platforms: linux/arm64
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Copy deployment files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_CD_USER }}
+          password: ${{ secrets.PI_CD_PASSWORD }}
+          source: "docker-compose.yml,nginx/"
+          target: "~/artur-deployment"
+
+      - name: Run deploy on Pi
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_CD_USER }}
+          password: ${{ secrets.PI_CD_PASSWORD }}
+          script: |
+            cd ~/artur-deployment
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+            docker compose pull
+            docker compose up -d --remove-orphans
