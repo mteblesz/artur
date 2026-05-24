@@ -1,0 +1,85 @@
+name: Build and Deploy to PI
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/servartur/src/Servartur.Api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/api:latest
+          platforms: linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cloudflared
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+
+      - name: Setup SSH config
+        run: |
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/config << EOF
+          Host ssh.mteblesz.dev
+            ProxyCommand cloudflared access ssh --hostname %h
+            User artur-cd
+          EOF
+
+      - name: Load SSH key
+        run: |
+          echo "${{ secrets.PI_SSH_KEY }}" > key.pem
+          chmod 600 key.pem
+
+      - name: Copy deployment files
+        run: |
+          scp -i key.pem -o StrictHostKeyChecking=no \
+            -r docker-compose.yml nginx/ \
+            artur-cd@ssh.mteblesz.dev:/home/artur-cd/artur-deployment
+
+      - name: Run deploy on Pi
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no \
+            artur-cd@ssh.mteblesz.dev << 'EOF'
+
+            cd /home/artur-cd/artur-deployment
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+              -u ${{ github.actor }} \
+              --password-stdin
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+          EOF
