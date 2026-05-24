@@ -13,7 +13,7 @@ app.UseHttpsRedirection();
 
 app.MapGet("/hello", () =>
 {
-    return "Hello, Kinga! Greeting from Raspberry Pi!";
+    return "<h1>Hello, Kinga! Greeting from Raspberry Pi!</h1>";
 })
 .WithName("GetHello");
 
