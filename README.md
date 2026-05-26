@@ -1,5 +1,5 @@
 # wildcartur
-Monorepo for *artur components
+Monorepo for <b>*artur</b> project components
 
 ---
 ## API
